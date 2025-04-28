@@ -2,11 +2,11 @@
 
 An OTEL library that doesn't weigh a ton.
 
-OTELite is built with size and performance in mind, noticing that current OTEL libraries either shipped an entire gRPC implementation or included sub-dependencies bloating the overall size.
+OTELite is built with size and performance in mind, noticing that current OTEL libraries either shipped an entire gRPC implementation or included sub-dependencies bloating their overall size and the size of your application.
 
-OTELite focuses on being small
+OTELite focuses on being small and easy to work with
 
-- Lightweight (11kb uncompressed, < 3kb brotli compressed)
+- Lightweight (12kb uncompressed, < 3kb brotli compressed)
 - Zero external dependencies
 - Written from scratch with key features
 
@@ -16,6 +16,9 @@ OTELite focuses on being small
 - Measures resource such as initial files (index.html, CSS, JS) - optional
 - Measures web vitals - optional
 - Measures soft navigations for SPAs - optional
+- Ability to list domains that should have tracing attached
+- Ability to exclude URLs from tracking
+- Ability to send spans to multiple collectors
 
 ## Setup
 

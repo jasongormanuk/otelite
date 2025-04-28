@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>OTELite</title>
+    </head>
+    <body>
+        <h1>Testing OTELite</h1>
+        <button id="cta">Click me</button>
+        <script type="module">
+            import { initOtelite, recordUserActionSpan } from './otelite-web.js';
+    
+            initOtelite({
+                collectorUrl: 'http://localhost:3000',
+                serviceName: 'My Browser App',
+                serviceVersion: '2.3',
+                batchInterval: 2000
+            });
+
+            document.getElementById('cta').addEventListener('click', () => {
+                recordUserActionSpan('Clicked Checkout Button', { button_id: 'cta' });
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                fetch('http://localhost:2000');
+
+                const req1 = new XMLHttpRequest();
+                req1.addEventListener("load", () => {});
+                req1.open("GET", "http://www.example.org/example.txt");
+                req1.send();
+            });
+        </script>
+    </body>
+</html>

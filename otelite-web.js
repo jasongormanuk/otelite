@@ -1,7 +1,9 @@
 let config = {
   collectorUrl: '', // required
+  collectorHeaders: {},
   serviceName: 'browser-app',
   serviceVersion: 'unknown',
+  deploymentEnv: 'dev',
   traceOrigins: [], // allowed domains for traceparent/tracestate
   captureResourceSpans: true,
   captureNavigationTiming: true,
@@ -51,6 +53,7 @@ function flushBatch() {
           attributes: [
             { key: 'service.name', value: { stringValue: config.serviceName } },
             { key: 'service.version', value: { stringValue: config.serviceVersion } },
+            { key: 'deployment.environment', value: { stringValue: config.deploymentEnv } },
             { key: 'telemetry.sdk.name', value: { stringValue: 'OTELite' } },
             { key: 'telemetry.sdk.language', value: { stringValue: 'javascript' } }
           ]
@@ -68,7 +71,10 @@ function flushBatch() {
     fetch(config.collectorUrl, {
       method: 'POST',
       body: JSON.stringify(payload),
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...config.collectorHeaders
+      },
       keepalive: true
     }).finally(() => {
       isSending = false;

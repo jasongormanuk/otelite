@@ -26,10 +26,21 @@ import { initOtelite } from './otelite-web.js';
 
 // defaults
 const config = {
-  collectorUrl: '', // required
+  collectors: [ // at least 1 collector required
+    {
+      url: 'YOUR_OTEL_COLLECTOR',
+      headers: { 'Authorization': 'Bearer mytoken123'} // any custom headers required for your collector
+    }
+  ],
   serviceName: 'browser-app',
   serviceVersion: 'unknown',
+  deploymentEnv: 'production',
   traceOrigins: [], // allowed domains for traceparent/tracestate
+  excludeUrls: [ // excluded some URLs from being tracked
+    '/hot-update',
+    /\.sockjs-node/,
+    url => url.startsWith('https://analytics.example.com')
+  ]
   captureResourceSpans: true,
   captureWebVitals: true,
   captureSoftNavigations: true,

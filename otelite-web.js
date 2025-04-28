@@ -1,10 +1,10 @@
 let config = {
-  collectorUrl: '', // required
-  collectorHeaders: {},
-  serviceName: 'browser-app',
-  serviceVersion: 'unknown',
+  collectors: [],
+  serviceName: 'My Web App',
+  serviceVersion: '0.0.1',
   deploymentEnv: 'dev',
-  traceOrigins: [], // allowed domains for traceparent/tracestate
+  traceOrigins: [],
+  excludeUrls: [],
   captureResourceSpans: true,
   captureNavigationTiming: true,
   captureWebVitals: true,
@@ -15,6 +15,7 @@ let config = {
 
 let spanBatch = [];
 let isSending = false;
+let collectorUrls = new Set();
 
 function shouldAttachTraceHeaders(url) {
   try {
@@ -23,6 +24,25 @@ function shouldAttachTraceHeaders(url) {
   } catch (e) {
     return false;
   }
+}
+
+function isUrlExcluded(url) {
+  if (!config.excludeUrls || config.excludeUrls.length === 0) {
+    return false;
+  }
+
+  return config.excludeUrls.some(rule => {
+    if (typeof rule === 'string') {
+      return url.includes(rule);
+    }
+    if (rule instanceof RegExp) {
+      return rule.test(url);
+    }
+    if (typeof rule === 'function') {
+      return rule(url);
+    }
+    return false;
+  });
 }
 
 function toNano(ms) {
@@ -44,8 +64,8 @@ function flushBatch() {
   if (spanBatch.length === 0 || isSending) return;
 
   isSending = true;
-
   const spans = spanBatch.splice(0, config.maxBatchSize);
+
   const payload = {
     resourceSpans: [
       {
@@ -55,7 +75,8 @@ function flushBatch() {
             { key: 'service.version', value: { stringValue: config.serviceVersion } },
             { key: 'deployment.environment', value: { stringValue: config.deploymentEnv } },
             { key: 'telemetry.sdk.name', value: { stringValue: 'OTELite' } },
-            { key: 'telemetry.sdk.language', value: { stringValue: 'javascript' } }
+            { key: 'telemetry.sdk.language', value: { stringValue: 'javascript' } },
+            { key: 'telemetry.sdk.version', value: { stringValue: '0.1.0' } }
           ]
         },
         scopeSpans: [{ spans }]
@@ -63,26 +84,24 @@ function flushBatch() {
     ]
   };
 
-  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-  const sent = navigator.sendBeacon(config.collectorUrl, blob);
-  isSending = false;
+  const bodyJson = JSON.stringify(payload);
+  
+  const promises = config.collectors.map(collector => {
+    return fetch(collector.url, {
+        method: 'POST',
+        body: bodyJson,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(collector.headers || {})
+        },
+        keepalive: true
+      }).catch(e => console.error('Failed to send spans to collector', collector.url, e));
+  });
 
-  if (!sent && navigator.onLine) {
-    fetch(config.collectorUrl, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      headers: { 
-        'Content-Type': 'application/json',
-        ...config.collectorHeaders
-      },
-      keepalive: true
-    }).finally(() => {
-      isSending = false;
-      scheduleFlush();
-    });
-  } else {
+  Promise.allSettled(promises).then(() => {
+    isSending = false;
     scheduleFlush();
-  }
+  });
 }
 
 function recordSpan({ url, method, status, startTime, duration, error }) {
@@ -125,9 +144,9 @@ function recordSpan({ url, method, status, startTime, duration, error }) {
 function buildTraceContext() {
   const traceId = generateId(16);
   const spanId = generateId(8);
-  const traceFlags = '01'; // sampled
+  const traceFlags = '01';
   const traceparent = `00-${traceId}-${spanId}-${traceFlags}`;
-  const tracestate = 'frontend=1'; // simple vendor-specific example
+  const tracestate = 'frontend=1';
 
   return { traceId, spanId, traceparent, tracestate };
 }
@@ -137,6 +156,11 @@ function patchFetch() {
   window.fetch = async function (input, init = {}) {
     const method = (init.method || 'GET').toUpperCase();
     const url = typeof input === 'string' ? input : input.url;
+
+    if (collectorUrls.has(url) || isUrlExcluded(url)) {
+      return originalFetch(input, init);
+    }
+
     const startTime = performance.now();
     const { traceId, spanId, traceparent, tracestate } = buildTraceContext();
 
@@ -185,6 +209,11 @@ function patchXHR() {
 
     const send = xhr.send;
     xhr.send = function (...args) {
+
+      if (collectorUrls.has(url) || isUrlExcluded(url)) {
+        return send.apply(this, args);
+      }
+
       const traceCtx = buildTraceContext();
       traceId = traceCtx.traceId;
       spanId = traceCtx.spanId;
@@ -195,13 +224,11 @@ function patchXHR() {
       hasErrored = false;
 
       xhr.addEventListener('readystatechange', () => {
-        if (xhr.readyState === 1 && shouldAttach) { // OPENED
+        if (xhr.readyState === 1 && shouldAttach) {
           try {
             xhr.setRequestHeader('traceparent', traceparent);
             xhr.setRequestHeader('tracestate', tracestate);
-          } catch (e) {
-            // some XHRs may forbid setting headers (CORS), just ignore
-          }
+          } catch (e) {}
         }
       });
 
@@ -241,14 +268,13 @@ function captureInitialResourceSpans() {
   for (const resource of resources) {
     const { traceId, spanId } = buildTraceContext();
 
-    // Filter out some things if needed (analytics, tracking pixels, etc.)
     if (resource.initiatorType === 'xmlhttprequest' || resource.initiatorType === 'fetch') {
-      continue; // we already capture fetch/xhr separately
+      continue;
     }
 
     const url = resource.name;
     const method = 'GET';
-    const status = 200; // assumed OK if it loaded
+    const status = 200;
     const startTime = performance.timeOrigin + resource.startTime;
     const duration = resource.duration;
 
@@ -325,7 +351,7 @@ function patchHistoryNavigation() {
   function recordNavigationSpan(fromUrl, toUrl) {
     const { traceId, spanId } = buildTraceContext();
     const start = performance.timeOrigin + performance.now();
-    const end = start + 1; // very short, synthetic span
+    const end = start + 1;
 
     spanBatch.push({
       traceId,
@@ -372,7 +398,7 @@ function patchHistoryNavigation() {
 export function recordUserActionSpan(name, attributes = {}) {
   const { traceId, spanId } = buildTraceContext();
   const start = performance.timeOrigin + performance.now();
-  const end = start + 1; // quick span
+  const end = start + 1;
 
   const attrs = Object.entries(attributes).map(([key, value]) => ({
     key,
@@ -396,10 +422,12 @@ export function recordUserActionSpan(name, attributes = {}) {
 export function initOtelite(userConfig = {}) {
   config = { ...config, ...userConfig };
 
-  if (!config.collectorUrl) {
-    console.error('Otelite init: collectorUrl is required.');
+  if (!config.collectors.length) {
+    console.error('OTELite init: at least 1 collector is required.');
     return;
   }
+
+  collectorUrls = new Set(config.collectors.map(c => c.url));
 
   patchFetch();
   patchXHR();

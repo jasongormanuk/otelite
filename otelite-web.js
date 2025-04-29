@@ -10,7 +10,8 @@ let config = {
   captureWebVitals: true,
   captureSoftNavigations: true,
   batchInterval: 5000,
-  maxBatchSize: 20
+  maxBatchSize: 20,
+  globalAttributes: {}
 };
 
 let spanBatch = [];
@@ -45,6 +46,14 @@ function isUrlExcluded(url) {
   });
 }
 
+function applyGlobalAttributes(attributes = []) {
+  const tags = Object.entries(config.globalAttributes || {}).map(([key, value]) => ({
+    key,
+    value: { stringValue: String(value) }
+  }));
+  return [...attributes, ...tags];
+}
+
 function toNano(ms) {
   return String(BigInt(Math.floor(ms)) * 1000000n);
 }
@@ -75,7 +84,7 @@ function flushBatch() {
             { key: 'service.version', value: { stringValue: config.serviceVersion } },
             { key: 'deployment.environment', value: { stringValue: config.deploymentEnv } },
             { key: 'telemetry.sdk.name', value: { stringValue: 'OTELite' } },
-            { key: 'telemetry.sdk.language', value: { stringValue: 'javascript' } },
+            { key: 'telemetry.sdk.language', value: { stringValue: 'JavaScript' } },
             { key: 'telemetry.sdk.version', value: { stringValue: '0.1.0' } }
           ]
         },
@@ -114,12 +123,12 @@ function recordSpan({ url, method, status, startTime, duration, error }) {
     kind: 3,
     startTimeUnixNano: toNano(startTime),
     endTimeUnixNano: toNano(startTime + duration),
-    attributes: [
+    attributes: applyGlobalAttributes([
       { key: 'http.method', value: { stringValue: method } },
       { key: 'http.url', value: { stringValue: url } },
       { key: 'http.status_code', value: { intValue: status || 0 } },
       { key: 'duration_ms', value: { doubleValue: duration } }
-    ],
+    ]),
     status: {
       code: isError ? 2 : 1,
       message: isError ? (error?.message || `HTTP ${status}`) : ''
@@ -265,29 +274,65 @@ function patchXHR() {
 function captureInitialResourceSpans() {
   const resources = performance.getEntriesByType('resource');
 
-  for (const resource of resources) {
-    const { traceId, spanId } = buildTraceContext();
+  if (!resources.length) return;
 
-    if (resource.initiatorType === 'xmlhttprequest' || resource.initiatorType === 'fetch') {
-      continue;
-    }
+  const { traceId, spanId: parentSpanId } = buildTraceContext();
+  const pageStart = performance.timeOrigin;
+  const pageEnd = pageStart + performance.now();
+
+  let totalEncodedBytes = 0;
+
+  for (const resource of resources) {
+    totalEncodedBytes += resource.encodedBodySize || 0;
+
+    const { spanId } = buildTraceContext();
+
+    if (resource.initiatorType === 'fetch' || resource.initiatorType === 'xmlhttprequest') continue;
 
     const url = resource.name;
     const method = 'GET';
-    const status = 200;
     const startTime = performance.timeOrigin + resource.startTime;
     const duration = resource.duration;
+    const encodedBytes = resource.encodedBodySize || 0;
+    const decodedBytes = resource.decodedBodySize || 0;
+    const transferSize = resource.transferSize || 0;
 
-    recordSpan({
+    spanBatch.push({
       traceId,
       spanId,
-      url,
-      method,
-      status,
-      startTime,
-      duration
+      parentSpanId,
+      name: `Resource: ${resource.initiatorType}`,
+      kind: 3,
+      startTimeUnixNano: toNano(startTime),
+      endTimeUnixNano: toNano(startTime + duration),
+      attributes: [
+        { key: 'http.url', value: { stringValue: url } },
+        { key: 'resource.initiator_type', value: { stringValue: resource.initiatorType } },
+        { key: 'duration_ms', value: { doubleValue: duration } },
+        { key: 'resource.encoded_body_size', value: { intValue: encodedBytes } },
+        { key: 'resource.decoded_body_size', value: { intValue: decodedBytes } },
+        { key: 'resource.transfer_size', value: { intValue: transferSize } }
+      ],
+      status: { code: 1, message: '' }
     });
   }
+
+  spanBatch.push({
+    traceId,
+    spanId: parentSpanId,
+    name: 'Initial Resources',
+    kind: 1,
+    startTimeUnixNano: toNano(pageStart),
+    endTimeUnixNano: toNano(pageEnd),
+    attributes: [
+      { key: 'group.type', value: { stringValue: 'resources' } },
+      { key: 'page.url', value: { stringValue: window.location.href } },
+      { key: 'resource.total_encoded_bytes', value: { intValue: totalEncodedBytes } }
+    ],
+    status: { code: 1, message: '' }
+  });
+
+  flushBatch();
 }
 
 function captureWebVitals() {
@@ -417,6 +462,13 @@ export function recordUserActionSpan(name, attributes = {}) {
   });
 
   scheduleFlush();
+}
+
+export function updateGlobalAttributes(newAttributes) {
+  config.globalAttributes = {
+    ...config.globalAttributes,
+    ...newAttributes
+  };
 }
 
 export function initOtelite(userConfig = {}) {

@@ -6,7 +6,7 @@ OTELite is built with size and performance in mind, noticing that current OTEL l
 
 OTELite focuses on being small and easy to work with
 
-- Lightweight (12kb uncompressed, < 3kb brotli compressed)
+- Lightweight (14kb uncompressed, ~3kb brotli compressed)
 - Zero external dependencies
 - Written from scratch with key features
 
@@ -48,7 +48,8 @@ const config = {
   captureWebVitals: true,
   captureSoftNavigations: true,
   batchInterval: 5000,
-  maxBatchSize: 20
+  maxBatchSize: 20,
+  globalAttributes: {} // applies to all spans
 }
 
 // call when your application boots up

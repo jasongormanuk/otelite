@@ -12,11 +12,14 @@
             initOtelite({
                 collectors: [
                     {
-                        url: 'http://localhost:3000'
+                        url: 'http://localhost:3000/'
                     }
                 ],
                 serviceName: 'My Browser App',
-                serviceVersion: '2.3'
+                serviceVersion: '2.3',
+                captureResourceSpans: true,
+                captureWebVitals: true,
+                captureSoftNavigations: true
             });
 
             document.getElementById('cta').addEventListener('click', () => {
@@ -24,11 +27,11 @@
             });
 
             document.addEventListener('DOMContentLoaded', function() {
-                fetch('http://localhost:2000');
+                fetch('http://localhost:2000?some=value');
 
                 const req = new XMLHttpRequest();
                 req.addEventListener("load", () => {});
-                req.open("GET", "http://www.example.org/example.txt");
+                req.open("GET", "http://www.example.org/example.txt?other=value");
                 req.send();
             });
         </script>

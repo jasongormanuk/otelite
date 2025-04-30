@@ -27,7 +27,6 @@ Import the library and adjust its configuration to fit your application:
 ```js
 import { initOtelite, recordUserActionSpan, updateGlobalAttributes } from './otelite-web.js';
 
-// defaults
 const config = {
   collectors: [ // At least 1 collector required
     {
@@ -35,18 +34,18 @@ const config = {
       headers: { 'Authorization': 'Bearer mytoken123'} // optional custom headers required for your collector
     }
   ],
-  serviceName: 'browser-app', // Your application name
-  serviceVersion: 'unknown', // Your application version
-  deploymentEnv: 'production', // Your environment
+  serviceName: 'My Web App', // Your application name
+  serviceVersion: '0.0.1', // Your application version
+  deploymentEnv: 'dev', // Your environment
   traceOrigins: [], // Allowed domains for traceparent/tracestate
   excludeUrls: [ // Excluded URLs from being tracked
-    '/analytics/ping',
-    /\.socketjs-node/,
-    url => url.startsWith('https://analytics.example.com')
+    '/analytics/ping', // strings
+    /\.socketjs-node/, // regex
+    url => url.startsWith('https://analytics.example.com') // functions
   ],
-  captureResourceSpans: true, // Optional feature
-  captureWebVitals: true, // Optional feature
-  captureSoftNavigations: true, // Optional feature
+  captureResourceSpans: false, // Optional feature
+  captureWebVitals: false, // Optional feature
+  captureSoftNavigations: false, // Optional feature
   batchInterval: 5000, // How often to ping collectors (ms)
   maxBatchSize: 20, // How many items to send each ping
   globalAttributes: {} // Apply global attributes to all span measurements

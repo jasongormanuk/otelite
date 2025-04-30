@@ -1,0 +1,27 @@
+{
+  "name": "otelite",
+  "version": "0.2.0",
+  "description": "OTEL library that doesn't weigh a ton",
+  "type": "module",
+  "main": "otelite-web.js",
+  "files": ["otelite-web.js"],
+  "author": "Jason Gorman <support@jasongorman.uk>",
+  "license": "MIT",
+  "homepage": "https://github.com/jasongormanuk/otelite#readme",
+  "bugs": {
+    "url": "https://github.com/jasongormanuk/otelite/issues"
+  },
+  "keywords": [
+    "otel",
+    "otlp",
+    "browser",
+    "web"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jasongormanuk/otelite.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

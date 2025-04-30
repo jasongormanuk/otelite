@@ -25,7 +25,7 @@ OTELite focuses on being small and easy to work with
 Import the library and adjust its configuration to fit your application:
 
 ```js
-import { initOtelite } from './otelite-web.js';
+import { initOtelite, recordUserActionSpan, updateGlobalAttributes } from './otelite-web.js';
 
 // defaults
 const config = {
@@ -37,21 +37,36 @@ const config = {
   ],
   serviceName: 'browser-app', // Your application name
   serviceVersion: 'unknown', // Your application version
-  deploymentEnv: 'production', // Your Environment
+  deploymentEnv: 'production', // Your environment
   traceOrigins: [], // Allowed domains for traceparent/tracestate
-  excludeUrls: [ // Excluded some URLs from being tracked
-    '/hot-update',
-    /\.sockjs-node/,
+  excludeUrls: [ // Excluded URLs from being tracked
+    '/analytics/ping',
+    /\.socketjs-node/,
     url => url.startsWith('https://analytics.example.com')
-  ]
+  ],
   captureResourceSpans: true, // Optional feature
   captureWebVitals: true, // Optional feature
   captureSoftNavigations: true, // Optional feature
   batchInterval: 5000, // How often to ping collectors (ms)
   maxBatchSize: 20, // How many items to send each ping
-  globalAttributes: {} // Apply global attributes to all spans
+  globalAttributes: {} // Apply global attributes to all span measurements
 }
 
 // Call once when your application boots up
 initOtelite(config);
+
+
+// ---- Custom measurements: e.g CTA clicks ----------------------------
+//
+// trigger when clicking CTA link
+recordUserActionSpan('CTA Link Click', { someInfo: 'details', });
+
+
+// ----- Update Global Attributes with information at runtime -----------
+//
+// e.g tie spans together with session information
+updateGlobalAttributes({
+  userSessionID: `${SESSION_ID}`,
+  deviceOS: ``
+});
 ```

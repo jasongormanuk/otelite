@@ -1,10 +1,12 @@
 {
   "name": "otelite",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "OTEL library that doesn't weigh a ton",
   "type": "module",
   "main": "otelite-web.js",
-  "files": ["otelite-web.js"],
+  "files": [
+    "otelite-web.js"
+  ],
   "author": "Jason Gorman <support@jasongorman.uk>",
   "license": "MIT",
   "homepage": "https://github.com/jasongormanuk/otelite#readme",

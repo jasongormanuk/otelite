@@ -66,7 +66,6 @@ recordUserActionSpan('CTA Link Click', { someInfo: 'details', });
 //
 // e.g tie spans together with session information
 updateGlobalAttributes({
-  userSessionID: `${SESSION_ID}`,
-  deviceOS: ``
+  userSessionID: `${SESSION_ID}`
 });
 ```

@@ -36,9 +36,9 @@ const config = {
   ],
   serviceName: 'My Web App', // Your application name
   serviceVersion: '0.0.1', // Your application version
-  deploymentEnv: 'dev', // Your environment
-  traceOrigins: [], // Allowed domains for traceparent/tracestate
-  excludeUrls: [ // Excluded URLs from being tracked
+  deploymentEnv: 'dev', // Your application environment
+  traceOrigins: [], // Domains to attach traceparent/tracestate headers
+  excludeUrls: [ // Exclude URLs from being tracked
     '/analytics/ping', // strings
     /\.socketjs-node/, // regex
     url => url.startsWith('https://analytics.example.com') // functions
@@ -58,7 +58,7 @@ initOtelite(config);
 // ---- Custom measurements: e.g CTA clicks ----------------------------
 //
 // trigger when clicking CTA link
-recordUserActionSpan('CTA Link Click', { someInfo: 'details', });
+recordUserActionSpan('CTA Link Click', { someInfo: 'details' });
 
 
 // ----- Update Global Attributes with information at runtime -----------

@@ -1,3 +1,11 @@
+const OTELiteName = 'OTELite';
+const OTELiteVersion = '0.2.0';
+const OTELiteLang = 'JavaScript';
+
+let spanBatch = [];
+let isSending = false;
+let collectorUrls = new Set();
+
 let config = {
   collectors: [],
   serviceName: 'My Web App',
@@ -5,18 +13,13 @@ let config = {
   deploymentEnv: 'dev',
   traceOrigins: [],
   excludeUrls: [],
-  captureResourceSpans: true,
-  captureNavigationTiming: true,
-  captureWebVitals: true,
-  captureSoftNavigations: true,
+  captureResourceSpans: false,
+  captureWebVitals: false,
+  captureSoftNavigations: false,
   batchInterval: 5000,
   maxBatchSize: 20,
   globalAttributes: {}
 };
-
-let spanBatch = [];
-let isSending = false;
-let collectorUrls = new Set();
 
 function shouldAttachTraceHeaders(url) {
   try {
@@ -63,6 +66,18 @@ function generateId(bytes) {
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function parseAndNormalizeUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return {
+      normalized: `${parsed.origin}${parsed.pathname}`,
+      query: parsed.search || ''
+    };
+  } catch (e) {
+    return { normalized: rawUrl, query: '' };
+  }
+}
+
 function scheduleFlush() {
   if (!isSending && spanBatch.length > 0) {
     setTimeout(flushBatch, config.batchInterval);
@@ -83,9 +98,9 @@ function flushBatch() {
             { key: 'service.name', value: { stringValue: config.serviceName } },
             { key: 'service.version', value: { stringValue: config.serviceVersion } },
             { key: 'deployment.environment', value: { stringValue: config.deploymentEnv } },
-            { key: 'telemetry.sdk.name', value: { stringValue: 'OTELite' } },
-            { key: 'telemetry.sdk.language', value: { stringValue: 'JavaScript' } },
-            { key: 'telemetry.sdk.version', value: { stringValue: '0.1.0' } }
+            { key: 'telemetry.sdk.name', value: { stringValue: OTELiteName } },
+            { key: 'telemetry.sdk.language', value: { stringValue: OTELiteLang } },
+            { key: 'telemetry.sdk.version', value: { stringValue: OTELiteVersion } }
           ]
         },
         scopeSpans: [{ spans }]
@@ -113,7 +128,7 @@ function flushBatch() {
   });
 }
 
-function recordSpan({ url, method, status, startTime, duration, error }) {
+function recordSpan({ url, method, status, startTime, duration, error, extraAttributes = [] }) {
   const isError = error || status >= 400;
 
   const span = {
@@ -127,7 +142,8 @@ function recordSpan({ url, method, status, startTime, duration, error }) {
       { key: 'http.method', value: { stringValue: method } },
       { key: 'http.url', value: { stringValue: url } },
       { key: 'http.status_code', value: { intValue: status || 0 } },
-      { key: 'duration_ms', value: { doubleValue: duration } }
+      { key: 'duration_ms', value: { doubleValue: duration } },
+      ...(extraAttributes || [])
     ]),
     status: {
       code: isError ? 2 : 1,
@@ -164,7 +180,8 @@ function patchFetch() {
   const originalFetch = window.fetch;
   window.fetch = async function (input, init = {}) {
     const method = (init.method || 'GET').toUpperCase();
-    const url = typeof input === 'string' ? input : input.url;
+    const rawUrl = typeof input === 'string' ? input : input.url;
+    const { normalized: url, query } = parseAndNormalizeUrl(rawUrl);
 
     if (collectorUrls.has(url) || isUrlExcluded(url)) {
       return originalFetch(input, init);
@@ -183,11 +200,11 @@ function patchFetch() {
     try {
       const response = await originalFetch(input, init);
       const duration = performance.now() - startTime;
-      recordSpan({ traceId, spanId, url, method, status: response.status, startTime: performance.timeOrigin + startTime, duration });
+      recordSpan({ traceId, spanId, url, method, status: response.status, startTime: performance.timeOrigin + startTime, duration, extraAttributes: query ? [{ key: 'http.query', value: { stringValue: query } }] : [] });
       return response;
     } catch (error) {
       const duration = performance.now() - startTime;
-      recordSpan({ traceId, spanId, url, method, status: 0, startTime: performance.timeOrigin + startTime, duration, error });
+      recordSpan({ traceId, spanId, url, method, status: 0, startTime: performance.timeOrigin + startTime, duration, error, extraAttributes: query ? [{ key: 'http.query', value: { stringValue: query } }] : [] });
       throw error;
     }
   };
@@ -200,6 +217,7 @@ function patchXHR() {
     const xhr = new OriginalXHR();
     let startTime = 0;
     let url = '';
+    let urlQuery = '';
     let method = 'GET';
     let hasErrored = false;
     let traceId = '';
@@ -211,7 +229,10 @@ function patchXHR() {
     const open = xhr.open;
     xhr.open = function (m, u, ...args) {
       method = m.toUpperCase();
-      url = u;
+      const rawUrl = u;
+      const parsed = parseAndNormalizeUrl(rawUrl);
+      url = parsed.normalized;
+      urlQuery = parsed.query;
       shouldAttach = shouldAttachTraceHeaders(u);
       return open.call(this, m, u, ...args);
     };
@@ -254,7 +275,8 @@ function patchXHR() {
           status,
           startTime: start,
           duration,
-          error: hasErrored ? new Error('XHR network error or abort') : undefined
+          error: hasErrored ? new Error('XHR network error or abort') : undefined,
+          extraAttributes: urlQuery ? [{ key: 'http.query', value: { stringValue: urlQuery } }] : []
         });
       };
 

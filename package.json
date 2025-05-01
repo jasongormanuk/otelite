@@ -5,8 +5,17 @@
   "type": "module",
   "main": "otelite-web.js",
   "files": [
-    "otelite-web.js"
+    "otelite-web.js",
+    "otelite-web.d.ts"
   ],
+  "types": "otelite-web.d.ts",
+  "exports": {
+    ".": {
+      "import": "./otelite-web.js",
+      "types": "./otelite-web.d.ts"
+    }
+  },
+  "sideEffects": false,
   "author": "Jason Gorman <support@jasongorman.uk>",
   "license": "MIT",
   "homepage": "https://github.com/jasongormanuk/otelite#readme",

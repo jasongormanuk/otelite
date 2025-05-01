@@ -1,6 +1,6 @@
 {
   "name": "otelite",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "OTEL library that doesn't weigh a ton",
   "type": "module",
   "main": "otelite-web.js",

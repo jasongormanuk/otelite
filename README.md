@@ -22,7 +22,14 @@ OTELite focuses on being small and easy to work with
 
 ## Setup
 
-Import the library and adjust its configuration to fit your application:
+Import the library and adjust its configuration to fit your application
+
+NPM: https://www.npmjs.com/package/otelite
+
+```
+npm i otelite
+```
+
 
 ```js
 import { initOtelite, recordUserActionSpan, updateGlobalAttributes } from './otelite-web.js';

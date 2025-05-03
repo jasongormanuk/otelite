@@ -1,10 +1,9 @@
-const OTELiteName = 'OTELite';
-const OTELiteVersion = '0.2.0';
-const OTELiteLang = 'JavaScript';
+const OteliteName = 'Otelite';
+const OteliteVersion = '0.5.0';
+const OteliteLang = 'JavaScript';
 
 let spanBatch = [];
 let isSending = false;
-let collectorUrls = new Set();
 
 let config = {
   collectors: [],
@@ -16,6 +15,7 @@ let config = {
   captureResourceSpans: false,
   captureWebVitals: false,
   captureSoftNavigations: false,
+  captureJSErrors: false,
   batchInterval: 5000,
   maxBatchSize: 20,
   globalAttributes: {}
@@ -47,6 +47,42 @@ function isUrlExcluded(url) {
     }
     return false;
   });
+}
+
+function getBrowser() {
+  const ua = navigator.userAgent;
+  const data = { name: 'Unknown', version: '0', platform: navigator.platform };
+
+  const safari = ua.match(/Version\/(\d+\.\d+).*Safari/);
+  if (safari && !ua.match(/Chrome|CriOS|Edg/)) {
+    data.name = 'Safari';
+    data.version = safari[1];
+    data.platform = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : 'macOS';
+    return data;
+  }
+
+  const edge = ua.match(/EdgA?\/(\d+\.\d+\.\d+\.\d+)/);
+  if (edge) {
+    data.name = 'Microsoft Edge';
+    data.version = edge[1];
+    return data;
+  }
+
+  const chrome = ua.match(/(?:Chrome|CriOS)\/(\d+\.\d+\.\d+\.\d+)/);
+  if (chrome) {
+    data.name = /CriOS/.test(ua) ? 'Chrome iOS' : 'Chrome';
+    data.version = chrome[1];
+    return data;
+  }
+
+  const firefox = ua.match(/Firefox\/(\d+\.\d+)/);
+  if (firefox) {
+    data.name = 'Firefox';
+    data.version = firefox[1];
+    return data;
+  }
+
+  return data;
 }
 
 function applyGlobalAttributes(attributes = []) {
@@ -90,6 +126,8 @@ function flushBatch() {
   isSending = true;
   const spans = spanBatch.splice(0, config.maxBatchSize);
 
+  const browser = getBrowser();
+
   const payload = {
     resourceSpans: [
       {
@@ -98,9 +136,12 @@ function flushBatch() {
             { key: 'service.name', value: { stringValue: config.serviceName } },
             { key: 'service.version', value: { stringValue: config.serviceVersion } },
             { key: 'deployment.environment', value: { stringValue: config.deploymentEnv } },
-            { key: 'telemetry.sdk.name', value: { stringValue: OTELiteName } },
-            { key: 'telemetry.sdk.language', value: { stringValue: OTELiteLang } },
-            { key: 'telemetry.sdk.version', value: { stringValue: OTELiteVersion } }
+            { key: 'telemetry.sdk.name', value: { stringValue: OteliteName } },
+            { key: 'telemetry.sdk.language', value: { stringValue: OteliteLang } },
+            { key: 'telemetry.sdk.version', value: { stringValue: OteliteVersion } },
+            { key: 'browser.name', value: { stringValue: `${browser.name}` } },
+            { key: 'browser.version', value: { stringValue: `${browser.version}` } },
+            { key: 'browser.platform', value: { stringValue: `${browser.platform}` } }
           ]
         },
         scopeSpans: [{ spans }]
@@ -111,7 +152,7 @@ function flushBatch() {
   const bodyJson = JSON.stringify(payload);
   
   const promises = config.collectors.map(collector => {
-    return fetch(collector.url, {
+    return fetch(`${collector.url}/v1/traces/`, {
         method: 'POST',
         body: bodyJson,
         headers: {
@@ -128,7 +169,7 @@ function flushBatch() {
   });
 }
 
-function recordSpan({ url, method, status, startTime, duration, error, extraAttributes = [] }) {
+function recordHTTPSpan({ url, method, status, startTime, duration, error, extraAttributes = [] }) {
   const isError = error || status >= 400;
 
   const span = {
@@ -183,7 +224,7 @@ function patchFetch() {
     const rawUrl = typeof input === 'string' ? input : input.url;
     const { normalized: url, query } = parseAndNormalizeUrl(rawUrl);
 
-    if (collectorUrls.has(url) || isUrlExcluded(url)) {
+    if (url.includes(`/v1/traces`) || isUrlExcluded(url)) {
       return originalFetch(input, init);
     }
 
@@ -200,11 +241,11 @@ function patchFetch() {
     try {
       const response = await originalFetch(input, init);
       const duration = performance.now() - startTime;
-      recordSpan({ traceId, spanId, url, method, status: response.status, startTime: performance.timeOrigin + startTime, duration, extraAttributes: query ? [{ key: 'http.query', value: { stringValue: query } }] : [] });
+      recordHTTPSpan({ traceId, spanId, url, method, status: response.status, startTime: performance.timeOrigin + startTime, duration, extraAttributes: query ? [{ key: 'http.query', value: { stringValue: query } }] : [] });
       return response;
     } catch (error) {
       const duration = performance.now() - startTime;
-      recordSpan({ traceId, spanId, url, method, status: 0, startTime: performance.timeOrigin + startTime, duration, error, extraAttributes: query ? [{ key: 'http.query', value: { stringValue: query } }] : [] });
+      recordHTTPSpan({ traceId, spanId, url, method, status: 0, startTime: performance.timeOrigin + startTime, duration, error, extraAttributes: query ? [{ key: 'http.query', value: { stringValue: query } }] : [] });
       throw error;
     }
   };
@@ -240,7 +281,7 @@ function patchXHR() {
     const send = xhr.send;
     xhr.send = function (...args) {
 
-      if (collectorUrls.has(url) || isUrlExcluded(url)) {
+      if (url.includes(`/v1/traces`) || isUrlExcluded(url)) {
         return send.apply(this, args);
       }
 
@@ -267,7 +308,7 @@ function patchXHR() {
         const start = performance.timeOrigin + startTime;
         const status = hasErrored ? 0 : xhr.status;
 
-        recordSpan({
+        recordHTTPSpan({
           traceId,
           spanId,
           url,
@@ -312,7 +353,6 @@ function captureInitialResourceSpans() {
     if (resource.initiatorType === 'fetch' || resource.initiatorType === 'xmlhttprequest') continue;
 
     const url = resource.name;
-    const method = 'GET';
     const startTime = performance.timeOrigin + resource.startTime;
     const duration = resource.duration;
     const encodedBytes = resource.encodedBodySize || 0;
@@ -343,7 +383,7 @@ function captureInitialResourceSpans() {
     traceId,
     spanId: parentSpanId,
     name: 'Initial Resources',
-    kind: 1,
+    kind: 3,
     startTimeUnixNano: toNano(pageStart),
     endTimeUnixNano: toNano(pageEnd),
     attributes: [
@@ -462,7 +502,7 @@ function patchHistoryNavigation() {
   });
 }
 
-export function recordUserActionSpan(name, attributes = {}) {
+export function recordCustomSpan(name, attributes = {}, startTime, endTime, spanKind) {
   const { traceId, spanId } = buildTraceContext();
   const start = performance.timeOrigin + performance.now();
   const end = start + 1;
@@ -475,15 +515,81 @@ export function recordUserActionSpan(name, attributes = {}) {
   spanBatch.push({
     traceId,
     spanId,
-    name: `User Action: ${name}`,
-    kind: 1,
-    startTimeUnixNano: toNano(start),
-    endTimeUnixNano: toNano(end),
-    attributes: attrs,
+    name: `${name}`,
+    kind: spanKind || 1,
+    startTimeUnixNano: startTime || toNano(start),
+    endTimeUnixNano: endTime || toNano(end),
+    attributes: applyGlobalAttributes([
+      ...attrs,
+      ...(config.extraAttributes || [])
+    ]),
     status: { code: 1, message: '' }
   });
 
   scheduleFlush();
+}
+
+function patchJsErrorHandler() {
+  window.addEventListener('error', event => {
+    const message = event.message || 'Unknown JS error';
+    const url = event.filename || window.location.href;
+    const lineNum = event.lineno ?? 0;
+    const colNum = event.colno ?? 0;
+
+    const trace = buildTraceContext();
+
+    const startTime = Date.now();
+
+    spanBatch.push({
+      traceId: trace.traceId,
+      spanId: trace.spanId,
+      name: `JS Error: ${message}`,
+      kind: 1,
+      startTimeUnixNano: toNano(startTime),
+      endTimeUnixNano: toNano(startTime + 1),
+      attributes: applyGlobalAttributes([
+        { key: 'error.line', value: { intValue: lineNum } },
+        { key: 'error.column', value: { intValue: colNum } },
+        { key: 'error.filename', value: { stringValue: url } },
+        { key: 'error.message', value: { stringValue: message } },
+        ...(config.extraAttributes || [])
+      ]),
+      status: {
+        code: 2,
+        message: message
+      }
+    });
+
+    scheduleFlush();
+  });
+
+  window.addEventListener('unhandledrejection', event => {
+    const reason = event.reason;
+    const message = typeof reason === 'string' ? reason : (reason?.message || 'Unhandled promise rejection');
+
+    const trace = buildTraceContext();
+
+    const startTime = Date.now();
+
+    spanBatch.push({
+      traceId: trace.traceId,
+      spanId: trace.spanId,
+      name: `Unhandled Promise Rejection`,
+      kind: 1,
+      startTimeUnixNano: toNano(startTime),
+      endTimeUnixNano: toNano(startTime + 1),
+      attributes: applyGlobalAttributes([
+        { key: 'error.promise', value: { stringValue: message } },
+        ...(config.extraAttributes || [])
+      ]),
+      status: {
+        code: 2,
+        message: message
+      }
+    });
+
+    scheduleFlush();
+  });
 }
 
 export function updateGlobalAttributes(newAttributes) {
@@ -497,21 +603,23 @@ export function initOtelite(userConfig = {}) {
   config = { ...config, ...userConfig };
 
   if (!config.collectors.length) {
-    console.error('OTELite init: at least 1 collector is required.');
+    console.error('Otelite init: at least 1 collector is required.');
     return;
   }
 
-  collectorUrls = new Set(config.collectors.map(c => c.url));
-
   patchFetch();
   patchXHR();
-  
+
   if (config.captureSoftNavigations) {
     patchHistoryNavigation();
   }
 
   if (config.captureWebVitals) {
     captureWebVitals();
+  }
+
+  if (config.captureJSErrors) {
+    patchJsErrorHandler();
   }
 
   if (document.readyState === 'complete') {

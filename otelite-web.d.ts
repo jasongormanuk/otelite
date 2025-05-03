@@ -9,7 +9,7 @@ export interface OtelCollectorConfig {
 }
 
 export interface OteliteConfig {
-    /** One or more OTEL collectors to send traces to */
+    /** One or more Otel collectors to send traces to */
     collectors: OtelCollectorConfig[];
   
     /** Logical name of the app or service (e.g., 'checkout-ui') */
@@ -38,6 +38,9 @@ export interface OteliteConfig {
   
     /** Enable tracking client-side history API navigations */
     captureSoftNavigations?: boolean;
+
+    /** Enable tracking client-side JS errors */
+    captureJSErrors?: boolean,
   
     /** How often to flush spans in ms (default: 5000) */
     batchInterval?: number;
@@ -51,9 +54,12 @@ export interface OteliteConfig {
 
 export function initOtelite(config: OtelTrackerConfig): void;
 
-export function recordUserActionSpan(
+export function recordCustomSpan(
     name: string,
-    attributes?: SpanAttributeMap
+    attributes?: SpanAttributeMap,
+    startTime?: number,
+    endTime?: number,
+    spanKind?: number
 ): void;
 
 export function updateGlobalAttributes(

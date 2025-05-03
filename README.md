@@ -1,14 +1,13 @@
-# OTELite
+# Otelite
 
-An OTEL library that doesn't weigh a ton.
+A lightweight, web focused Otel library.
 
-OTELite is built with size and performance in mind, noticing that current OTEL libraries either shipped an entire gRPC implementation or included sub-dependencies bloating their overall size and the size of your application.
+Otel libraries in the wild either shipped an entire gRPC implementation to the browser or include a large amount of sub-dependencies bloating the overall size of your application.
 
-OTELite focuses on being small and easy to work with
+Otelite focuses on being small and easy to work with.
 
-- Lightweight (15kb uncompressed, 3.3kb brotli compressed)
+- Lightweight (18kb uncompressed, 4kb brotli compressed)
 - Zero external dependencies
-- Written from scratch with key features
 
 ## Features
 
@@ -16,9 +15,10 @@ OTELite focuses on being small and easy to work with
 - Measures resource such as initial files (index.html, CSS, JS) - optional
 - Measures web vitals - optional
 - Measures soft navigations for SPAs - optional
+- Measures JS errors - optional
 - Add domains that should have tracing attached
 - Exclude certain URLs from tracking
-- Send to multiple OTEL collectors
+- Send to multiple Otel collectors
 
 ## Setup
 
@@ -32,12 +32,12 @@ npm i otelite
 
 
 ```js
-import { initOtelite, recordUserActionSpan, updateGlobalAttributes } from './otelite-web.js';
+import { initOtelite, recordCustomSpan, updateGlobalAttributes } from './otelite-web.js';
 
 const config = {
   collectors: [ // At least 1 collector required
     {
-      url: 'YOUR_OTEL_COLLECTOR_URL',
+      url: 'YOUR_OTEL_COLLECTOR_URL', // OTLP/HTTP endpoint
       headers: { 'Authorization': 'Bearer mytoken123'} // optional custom headers required for your collector
     }
   ],
@@ -53,6 +53,7 @@ const config = {
   captureResourceSpans: false, // Optional feature
   captureWebVitals: false, // Optional feature
   captureSoftNavigations: false, // Optional feature
+  captureJSErrors: false, // Optional feature
   batchInterval: 5000, // How often to ping collectors (ms)
   maxBatchSize: 20, // How many items to send each ping
   globalAttributes: {} // Apply global attributes to all span measurements
@@ -65,7 +66,7 @@ initOtelite(config);
 // ---- Custom measurements: e.g CTA clicks ----------------------------
 //
 // trigger when clicking CTA link
-recordUserActionSpan('CTA Link Click', { someInfo: 'details' });
+recordCustomSpan('CTA Link Click', { someInfo: 'details' });
 
 
 // ----- Update Global Attributes with information at runtime -----------

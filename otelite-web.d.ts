@@ -2,7 +2,7 @@ export type SpanAttributeValue = string | number | boolean;
 export type SpanAttributeMap = Record<string, SpanAttributeValue>;
 
 export interface OtelCollectorConfig {
-    /** Full URL to the collector endpoint (e.g., https://example.com/v1/traces) */
+    /** Full URL to your collectors traces endpoint (e.g., https://example.com/v1/traces) */
     url: string;
     /** Optional custom headers (e.g., Authorization, X-Tenant-ID) */
     headers?: Record<string, string>;

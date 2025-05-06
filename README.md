@@ -37,7 +37,7 @@ import { initOtelite, recordCustomSpan, updateGlobalAttributes } from './otelite
 const config = {
   collectors: [ // At least 1 collector required
     {
-      url: 'YOUR_OTEL_COLLECTOR_URL', // OTLP/HTTP endpoint
+      url: 'YOUR_OTEL_COLLECTOR_URL', // OTLP/HTTP traces endpoint
       headers: { 'Authorization': 'Bearer mytoken123'} // optional custom headers required for your collector
     }
   ],

@@ -1,9 +1,10 @@
 const OteliteName = 'Otelite';
-const OteliteVersion = '0.5.0';
+const OteliteVersion = '0.5.1';
 const OteliteLang = 'JavaScript';
 
 let spanBatch = [];
 let isSending = false;
+let collectorUrls = [];
 
 let config = {
   collectors: [],
@@ -30,12 +31,12 @@ function shouldAttachTraceHeaders(url) {
   }
 }
 
-function isUrlExcluded(url) {
-  if (!config.excludeUrls || config.excludeUrls.length === 0) {
+function isUrlExcluded(url, rules) {
+  if (!rules || rules.length === 0) {
     return false;
   }
 
-  return config.excludeUrls.some(rule => {
+  return rules.some(rule => {
     if (typeof rule === 'string') {
       return url.includes(rule);
     }
@@ -152,7 +153,7 @@ function flushBatch() {
   const bodyJson = JSON.stringify(payload);
   
   const promises = config.collectors.map(collector => {
-    return fetch(`${collector.url}/v1/traces/`, {
+    return fetch(`${collector.url}`, {
         method: 'POST',
         body: bodyJson,
         headers: {
@@ -224,7 +225,7 @@ function patchFetch() {
     const rawUrl = typeof input === 'string' ? input : input.url;
     const { normalized: url, query } = parseAndNormalizeUrl(rawUrl);
 
-    if (url.includes(`/v1/traces`) || isUrlExcluded(url)) {
+    if (isUrlExcluded(url, [...collectorUrls, ...config.excludeUrls])) {
       return originalFetch(input, init);
     }
 
@@ -281,7 +282,7 @@ function patchXHR() {
     const send = xhr.send;
     xhr.send = function (...args) {
 
-      if (url.includes(`/v1/traces`) || isUrlExcluded(url)) {
+      if (isUrlExcluded(url, [...collectorUrls, ...config.excludeUrls])) {
         return send.apply(this, args);
       }
 
@@ -606,6 +607,8 @@ export function initOtelite(userConfig = {}) {
     console.error('Otelite init: at least 1 collector is required.');
     return;
   }
+
+  collectorUrls = new Set(config.collectors.map(c => c.url));
 
   patchFetch();
   patchXHR();

@@ -1,6 +1,6 @@
 # Otelite
 
-A lightweight, web focused Otel library.
+A lightweight, browser focused Otel library.
 
 Otel libraries in the wild either shipped an entire gRPC implementation to the browser or include a large amount of sub-dependencies bloating the overall size of your application.
 
